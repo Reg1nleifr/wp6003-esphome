@@ -18,66 +18,63 @@ static BLEUUID  commandUUID(COMMAND_UUID);
 static BLEUUID  sensorUUID(SENSOR_UUID);
 
 
-
 enum ConnectionStatus { pending, connected, disconnected, error };
-
-
-
-    
-/***
-   Internal Class for BLE Advertisement Callback
-  ***/
-class WP6003BLEAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
-  private:
-    WP6003BLEDevice* wp6003bledevice;
-
-  public:
-    WP6003BLEAdvertisedDeviceCallbacks(WP6003BLEDevice* wp6003bledevice) : BLEAdvertisedDeviceCallbacks() {
-      ESP_LOGD("wp6003ble_class", "Creating callback function");
-      this->wp6003bledevice = wp6003bledevice;
-    }
-
-    /***
-       Callback function on Advertisement Result
-      ***/
-    void onResult(BLEAdvertisedDevice advertisedDevice) {
-      ESP_LOGD("wp6003_ble_class", "%s", wp6003bledevice->deviceName.c_str());
-      ESP_LOGD("wp6003_ble_class", "BLE Advertised Device found: %s, %s", advertisedDevice.toString().c_str(), advertisedDevice.getName().c_str());
-
-      if (advertisedDevice.getName() == wp6003bledevice->deviceName) {
-        ESP_LOGD("wp6003_ble_class", "Correct Device Found: %s", advertisedDevice.getAddress().toString().c_str());
-        ESP_LOGD("wp6003_ble_class", "%s");
-        advertisedDevice.getScan()->stop();
-        wp6003bledevice->pServerAddress = new BLEAddress(advertisedDevice.getAddress());
-        wp6003bledevice->connectionStatus = pending;
-      }
-      delay(10);
-    }
-};
-
 
 class WP6003BLEDevice {
 
   private:
     int notifyRequest;
     int notificationInterval;
-    int timeoutInterval = 1200; // ~2 min
+    int timeoutInterval = 12000; // ~20 min
     std::string deviceName;
     
     ConnectionStatus connectionStatus;
     time_t notify_time;
-    BLEScan *pBLEScan;
     BLEAddress *pServerAddress;
     BLERemoteCharacteristic* pRemoteCommand;
     BLERemoteCharacteristic* pRemoteSensor;
 
-    // current sensor values
     double temp;
     double tvoc;
     double hcho;
     double co2;
     
     static std::map<BLERemoteCharacteristic*, WP6003BLEDevice*> remoteSensorToDevice;
+
+    
+    /***
+       Internal Class for BLE Advertisement Callback
+     ***/
+    class WP6003BLEAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
+      private:
+        WP6003BLEDevice* wp6003bledevice;
+
+      public:
+        WP6003BLEAdvertisedDeviceCallbacks(WP6003BLEDevice* wp6003bledevice) : BLEAdvertisedDeviceCallbacks() {
+          ESP_LOGD("wp6003ble_class", "Creating callback function");
+          this->wp6003bledevice = wp6003bledevice;
+        }
+
+        /***
+           Callback function on Advertisement Result
+         ***/
+        void onResult(BLEAdvertisedDevice advertisedDevice) {
+          ESP_LOGD("wp6003ble_class", "Result function");
+
+          ESP_LOGD("wp6003_ble_class", "%s", wp6003bledevice->deviceName.c_str());
+          ESP_LOGD("wp6003_ble_class", "BLE Advertised Device found: %s, %s", advertisedDevice.toString().c_str(), advertisedDevice.getName().c_str());
+
+          if (advertisedDevice.getName() == wp6003bledevice->deviceName) {
+            ESP_LOGD("wp6003_ble_class", "Correct Device Found");
+            ESP_LOGD("wp6003_ble_class", "%s", advertisedDevice.getAddress().toString().c_str());
+            advertisedDevice.getScan()->stop();
+            wp6003bledevice->pServerAddress = new BLEAddress(advertisedDevice.getAddress());
+            wp6003bledevice->connectionStatus = pending;
+          }
+          delay(10);
+        }
+    };
+
     
     /***
        Member function called by static method notifyCallback
@@ -91,7 +88,9 @@ class WP6003BLEDevice {
       ESP_LOGD("wp6003_ble_class", "%s", "Notify callback for characteristic");
       ESP_LOGD("wp6003_ble_class", "%s", pBLERemoteCharacteristic->getUUID().toString().c_str());
       ESP_LOGD("wp6003_ble_class", " data length:%d", length);
-      // ESP_LOGD("wp6003_ble_class", "%s" pData);
+      for (auto i = 0; i < length; i++) {
+        ESP_LOGD("wp6003_ble_class", "%c", pData[i]);
+      }
       ESP_LOGD("wp6003_ble_class", "Starting getting back data");
       if (pData[0] != 0x0a) {
         return;
@@ -102,12 +101,11 @@ class WP6003BLEDevice {
       this->hcho  = (pData[12] * 256 + pData[13]) / 1000.0;
       this->co2   = (pData[16] * 256 + pData[17]);
 
-    //  ESP_LOGD("wp6003_ble_class", "now: "); ESP_LOGD("wp6003_ble_class", "%s", time(NULL));
-     ESP_LOGD("wp6003_ble_class", "Time: 20%02d/%02d/%02d %02d:%02d\n", pData[1], pData[2], pData[3], pData[4], pData[5]);
-     ESP_LOGD("wp6003_ble_class", "Inside Class: Current Temp: %f\n", temp);
-     ESP_LOGD("wp6003_ble_class", "Inside Class: Current TVOC: %f\n", tvoc);
-     ESP_LOGD("wp6003_ble_class", "Inside Class: Current HCHO: %f\n", hcho);
-     ESP_LOGD("wp6003_ble_class", "Inside Class: Current CO2: %f\n", co2);
+      ESP_LOGD("wp6003_ble_class", "Time: 20%02d/%02d/%02d %02d:%02d\n", pData[1], pData[2], pData[3], pData[4], pData[5]);
+      ESP_LOGD("wp6003_ble_class", "Inside Class: Current Temp: %f\n", temp);
+      ESP_LOGD("wp6003_ble_class", "Inside Class: Current TVOC: %f\n", tvoc);
+      ESP_LOGD("wp6003_ble_class", "Inside Class: Current HCHO: %f\n", hcho);
+      ESP_LOGD("wp6003_ble_class", "Inside Class: Current CO2: %f\n", co2);
       
       notify_time = time(NULL);
     }
@@ -133,8 +131,6 @@ class WP6003BLEDevice {
       BLEClient*  pClient = BLEDevice::createClient();
       pClient->connect(pAddress);
       BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
-      ESP_LOGD("wp6003_ble_class", "Success Connection to %s", pAddress.toString().c_str());
-
 
       if (pRemoteService == nullptr) {
         ESP_LOGD("wp6003_ble_class", "Failed to find our service UUID: %s", serviceUUID.toString().c_str());
@@ -168,7 +164,6 @@ class WP6003BLEDevice {
       notify_time = time(NULL);
       ESP_LOGD("wp6003_ble_class", "send register notify");
       pRemoteSensor->registerForNotify(notifyCallback);
-      // setLEDsColor(25, 0x0000f0);
       delay(500);
 
       time_t t = time(NULL);
@@ -197,8 +192,9 @@ class WP6003BLEDevice {
   public: 
     WP6003BLEDevice(std::string deviceName) {
       this->deviceName = deviceName;
+      this->notificationInterval = notificationInterval;
       this->notifyRequest = 0;
-      this->notificationInterval = 600; // 1min
+      this->notificationInterval = 600; // 1 min
       this->timeoutInterval = 1200; // ~2 min
       this->connectionStatus = disconnected;
     }
@@ -216,15 +212,12 @@ class WP6003BLEDevice {
      ***/
     void setupBLEConnection() {
       ESP_LOGD("wp6003_ble_class", "Creating Connection");
-      BLEDevice::init("wp6003");
-      pBLEScan = BLEDevice::getScan(); // hopefully works..
+      BLEDevice::init("");
+      BLEScan* pBLEScan = BLEDevice::getScan();
       pBLEScan->setAdvertisedDeviceCallbacks(new WP6003BLEAdvertisedDeviceCallbacks(this));
       pBLEScan->setActiveScan(true);
-      ESP_LOGD("wp6003_ble_class", "Starting Scan BLE");
-      pBLEScan->start(10, true); // do the actual scan here!
-      ESP_LOGD("wp6003_ble_class", "Done Scanning BLE");
-      // pBLEScan->setInterval(100); //?
-      // pBLEScan->setWindow(99); //?
+      pBLEScan->start(10);
+    //   this->pServerAddress = new BLEAddress("60:03:03:93:E2:D4");  // set this properly with an input.. but otherwise it's good :)
       ESP_LOGD("wp6003_ble_class", "End of BLE setup, waiting for callback..");
     }
 
@@ -232,7 +225,8 @@ class WP6003BLEDevice {
         Connects to the sensor and requests data.
      ***/
     void updateSensorData() {
-      ESP_LOGD("wp6003_ble_class", "Updating BLE Sensor data");
+      // ESP_LOGD("wp6003_ble_class", "Updating Sensor data");
+
       if (connectionStatus == pending) {
         if (connectToServer(*pServerAddress)) {
           ESP_LOGD("wp6003_ble_class", "We are now connected to the BLE Server.");
@@ -242,7 +236,6 @@ class WP6003BLEDevice {
           connectionStatus = disconnected;
         }
       }
-      ESP_LOGD("wp6003_ble_class", "After 1st condition in updateSensorData()..");
       if (connectionStatus == connected) {
         notifyRequest++;
         if (notifyRequest > notificationInterval) { // 60 sec
@@ -254,19 +247,15 @@ class WP6003BLEDevice {
           if (now > notify_time + timeoutInterval) { // if no notify in default ~20 min.
             // ESP.restart();
             connectionStatus = error;
-            ESP_LOGD("wp6003_ble_class", "connection error on wp6003"); // request notify
+            ESP_LOGD("wp6003_ble_class", "connection error"); // request notify
             // there's an error :( maybe I can set an error State here..
           }
         }
       }
-      ESP_LOGD("wp6003_ble_class", "After 2nd condition in updateSensorData()..");
-      pBLEScan->clearResults(); // delete scans / release memory.
-      delay(100);
-      ESP_LOGD("wp6003_ble_class", "Scan Results cleared!");
+      //delay(100);
     }
 };
 
-// BLERemoteCharacteristic to WP6003BLEDevice
 std::map<BLERemoteCharacteristic*, WP6003BLEDevice*> WP6003BLEDevice::remoteSensorToDevice;
 
 
@@ -279,9 +268,12 @@ class WP6003 : public PollingComponent {
   Sensor *error_sensor = new Sensor();
   std::string deviceName;
   WP6003BLEDevice* wp6003ble;
+  BLEAddress* pServerAddress;
+  ConnectionStatus connectionStatus;
+
+//   std::map<BLERemoteCharacteristic*, WP6003BLEDevice*> WP6003BLEDevice::remoteSensorToDevice;
 
   // constructor
-  // Pull all 60 Seconds
   WP6003(std::string deviceName, int pollingInterval) : PollingComponent(pollingInterval) {
     this->deviceName = deviceName;
   }
@@ -295,9 +287,10 @@ class WP6003 : public PollingComponent {
     ESP_LOGD("wp", "Setting up BLE Connection done.");
   }
 
+
   void update() override {
     // This will be called every "update_interval" milliseconds.
-    wp6003ble->updateSensorData(); // lets not get updates anymore and see if that changes anything!
+    wp6003ble->updateSensorData();
     ESP_LOGD("wp", "The value of temperature sensor is: %f", wp6003ble->getTemp());
     temperature_sensor->publish_state(wp6003ble->getTemp());
     tvoc_sensor->publish_state(wp6003ble->getTvoc());

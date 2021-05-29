@@ -1,33 +1,30 @@
 substitutions:
-  devicename: esp32-ec2
+  devicename: esp32-wp6003-ec2
   friendly_name: ESP Collector 2 - Custom BLE Devices
 
 esphome:
   name: ${devicename}
   platform: ESP32
   board: m5stack-core-esp32
-  # board: pico32 
   platformio_options:
     upload_speed: 115200
   includes:
     - wp6003.h
 
-
 wifi:
-  ssid: ${wifi_name}
-  password: ${wifi_password}
+  ssid: ${wifi_ssid}
+  password: ${wifi_pw}
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: ${ap_name}
-    password: ${ap_password}
+    ssid: "Esp32-Wp6003 Fallback Hotspot"
+    password: ${esp32-ec2-ap_pw}
 
 captive_portal:
 
 # Enable logging
 logger:
   level: DEBUG
-
 
 # Enable Home Assistant API
 api:
@@ -38,32 +35,13 @@ sensor:
 # Custom Sensors
   - platform: custom
     lambda: |-
-      auto office_wp6003 = new WP6003("6003#060030393E6B5", 60000); // 300.000 ms = 5 Minuten
-      App.register_component(office_wp6003);
-      return {office_wp6003->temperature_sensor, office_wp6003->tvoc_sensor, office_wp6003->hcho_sensor, office_wp6003->co2_sensor, office_wp6003->error_sensor};
-
-    sensors:
-    - name: "Office - WP6003 Temperature"
-      unit_of_measurement: °C
-      accuracy_decimals: 1
-    - name: "Office - WP6003 TVOC"
-      unit_of_measurement: ppm
-      accuracy_decimals: 3
-    - name: "Office - WP6003 HCHO"
-      unit_of_measurement: ppm
-      accuracy_decimals: 3
-    - name: "Office - WP6003 CO2"
-      unit_of_measurement: ppm
-      accuracy_decimals: 0
-    - name: "Office - WP6003 Connection Status"
-      accuracy_decimals: 0
-
-
-  - platform: custom
-    lambda: |-
-      auto livingroom_wp6003 = new WP6003("6003#060030393E2D4", 60000); // 300.000 ms = 5 Minuten
+      auto livingroom_wp6003 = new WP6003("6003#060030393E2D4", 60000);
       App.register_component(livingroom_wp6003);
-      return {livingroom_wp6003->temperature_sensor, livingroom_wp6003->tvoc_sensor, livingroom_wp6003->hcho_sensor, livingroom_wp6003->co2_sensor, livingroom_wp6003->error_sensor};
+      return {livingroom_wp6003->temperature_sensor, 
+              livingroom_wp6003->tvoc_sensor, 
+              livingroom_wp6003->hcho_sensor, 
+              livingroom_wp6003->co2_sensor, 
+              livingroom_wp6003->error_sensor};
 
     sensors:
     - name: "Livingroom - WP6003 Temperature"
@@ -81,31 +59,32 @@ sensor:
     - name: "Livingroom - WP6003 Connection Status"
       accuracy_decimals: 0
 
-  - platform: wifi_signal
-    name: ${devicename} WiFi Signal
-  - platform: uptime
-    name: ${devicename} Uptime
+# Custom Sensors
+  - platform: custom
+    lambda: |-
+      auto bedroom_wp6003 = new WP6003("6003#060030393E6B5", 60000);
+      App.register_component(bedroom_wp6003);
+      return {bedroom_wp6003->temperature_sensor, 
+              bedroom_wp6003->tvoc_sensor, 
+              bedroom_wp6003->hcho_sensor, 
+              bedroom_wp6003->co2_sensor, 
+              bedroom_wp6003->error_sensor};
 
-esp32_ble_tracker:
-  on_ble_service_data_advertise:
-    - mac_address: 60:03:03:93:E2:D4
-      service_uuid: 0000FFF4-0000-1000-8000-00805F9B34FB
-      then:
-        - lambda: |-
-            const int16_t temp_val = (x[1] << 8) + x[0];
-            const float temperature = temp_val / 100.0;
-
-            const float temperature  = (x[6] * 256 + x[7]) / 10.0;
-            const float tvoc  = (x[10] * 256 + x[11]) / 1000.0;
-            const float hcho  = (x[12] * 256 + x[13]) / 1000.0;
-            const float co2   = (x[16] * 256 + x[17]);
-            
-            id(ble_temp).publish_state(temperature);
-    - mac_address: 11:22:33:44:55:66
-      service_uuid: 2a6f
-      then:
-        - lambda: 'id(ble_hum).publish_state(x[0]);'
-
+    sensors:
+    - name: "Bedroom - WP6003 Temperature"
+      unit_of_measurement: °C
+      accuracy_decimals: 1
+    - name: "Bedroom - WP6003 TVOC"
+      unit_of_measurement: ppm
+      accuracy_decimals: 3
+    - name: "Bedroom - WP6003 HCHO"
+      unit_of_measurement: ppm
+      accuracy_decimals: 3
+    - name: "Bedroom - WP6003 CO2"
+      unit_of_measurement: ppm
+      accuracy_decimals: 0
+    - name: "Bedroom - WP6003 Connection Status"
+      accuracy_decimals: 0
 
 
 light:
@@ -115,8 +94,8 @@ light:
     num_leds: 25
     rgb_order: GRB
     id: status_led
-    name: ${friendly_name} Light
-    color_correct: [50%, 50%, 50%]
+    name: ${friendly_name} - Light
+    color_correct: [0%, 0%, 50%]
     effects:
       - random:
       - flicker:
@@ -127,9 +106,7 @@ binary_sensor:
     pin:
       number: 39
       inverted: true
-    name: ${friendly_name} Button
+    name: ${friendly_name} - Button
     on_press:
       then:
         - light.toggle: status_led
-  - platform: status
-    name: ${friendly_name} Status
